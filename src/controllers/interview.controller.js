@@ -1,78 +1,63 @@
 import { Type } from "@google/genai";
 import ai from "../config/gemini.js";
-import { User } from "../models/user.model.js";
 import  aaClient  from "../config/assemblyAI.js";
-
+import cloudinary from "../config/cloudinary.js";
 
 export const prepareInterviewQuestions = async (req, res) => {
     try {
-      const userId = req.user.id;
       const { company, role, questionType } = req.body;
   
-      // Fetch user's technical details from DB
-      const user = await User.findById(userId).populate('resume');
-      if (!user || !user.resume) {
-        return res.status(404).json({ error: 'User resume not found' });
-      }
-  
-      const techDetails = user.resume.technical;
-  
       // Call Gemini to generate 5 questions
-      const prompt = `Based on these technical skills: ${techDetails} and targeting ${company} as a ${role}, generate 5 ${questionType} interview questions.`;
+      const prompt = `Generate 5 ${questionType} interview questions for a ${role} position at ${company}.`;
       const response = await ai.models.generateContent({
         model: 'gemini-2.0-flash-exp',
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        config: { responseMimeType: 'application/json',
-            responseSchema:{
-                type:Type.ARRAY,
-                items:{
-                    type:Type.OBJECT,
-                    properties:{
-                        question:{
-                            type:Type.STRING
-                        }
-
-                    },
-                    required:['question']
+        config: { 
+          responseMimeType: 'application/json',
+          responseSchema:{
+            type:Type.ARRAY,
+            items:{
+              type:Type.OBJECT,
+              properties:{
+                question:{
+                  type:Type.STRING
                 }
+              },
+              required:['question']
             }
-
-         }
+          }
+        }
       });
 
-      console.log('questions:',response.candidates[0].content);
-
-      const parts = response.candidates[0].content.parts
-
-      const jsonString = parts.map(p => p.text).join('')
+      const parts = response.candidates[0].content.parts;
+      const jsonString = parts.map(p => p.text).join('');
 
       let questionsArray;
       try {
-        questionsArray = JSON.parse(jsonString)
-        
+        questionsArray = JSON.parse(jsonString);
       } catch (error) {
-        console.error('Failed to parse questions JSON:', e, jsonString);
+        console.error('Failed to parse questions JSON:', error, jsonString);
         return res.status(500).json({ error: 'Invalid JSON from Gemini' });
       }
 
-      const questions = questionsArray.map(item =>item.question)
+      const questions = questionsArray.map(item => item.question);
 
       return res.status(200).json({
         questions
-      })
-      
-  
-    //   const parts = response.candidates[0].content.parts;
-    //   const jsonStr = parts.map(p => p.text).join('');
-    //   const { questions } = JSON.parse(jsonStr);
-  
-    //   return res.json({ questions });
+      });
     } catch (error) {
       console.error('Error generating questions:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
-  };
+};
 
+// export const handleQnaUpload = async(req,res)=>{
+//   console.log('Received files:', req.files.map(f => ({
+//       field: f.fieldname,
+//       name:  f.originalname,
+//       size:  f.size
+//     })));
+// }
 
   export const handleQnaUpload = async (req, res) => {
     try {
@@ -124,10 +109,14 @@ export const prepareInterviewQuestions = async (req, res) => {
             const uploadStream = cloudinary.uploader.upload_stream(
               { resource_type: 'auto', folder: 'interview_audio' },
               (error, result) => {
+                console.log('inside result: ',result);
+                
                 if (error) {
                   console.error("Cloudinary upload failed:", error);
                   reject(error);
                 } else {
+                    console.log('file uploaded to the cloudinary');
+                    
                   resolve(result);
                 }
               }

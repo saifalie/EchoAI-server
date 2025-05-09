@@ -1,6 +1,6 @@
 
 
-export const errorMiddleware = (error,req,res,next) =>{
+export const errorMiddleware = (error,req,res) =>{
     console.log('errorMiddleware - ',error);
 
     const statusCode =  error.statusCode || 500
