@@ -1,11 +1,11 @@
-import mongoose, { Schema, Types } from "mongoose";
+import mongoose, { Schema} from "mongoose";
 
 
 const userSchema = new Schema({
     username:{
         type:String,
         required:true,
-        unique:true
+        
     },
     email:{
         type:String,
@@ -16,6 +16,21 @@ const userSchema = new Schema({
         type:String,
         required:true
     },
+    resume:{
+        type:Schema.Types.ObjectId,
+        ref:'Resume'
+    },
+    history:[
+        {
+            type:Schema.Types.ObjectId,
+            ref:'Review'
+        }
+    ],
+    credits:{
+        type:Number,
+        default:2,
+        required:true
+    }
 
 })
 

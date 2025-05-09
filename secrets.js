@@ -11,3 +11,4 @@ export const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY
 export const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 export const VISION_FILE_NAME = process.env.VISION_FILE_NAME
+export const ASSEMBLY_AI_KEY = process.env.ASSEMBLY_AI_KEY

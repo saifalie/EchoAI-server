@@ -12,6 +12,14 @@ const resumeSchema =  new Schema({
     },
     summary:{
         type:String
+    },
+    technical:{
+        type:String,
+        required:true
+    },
+    recommendation:{
+        type:String,
+        required:true
     }
 })
 
