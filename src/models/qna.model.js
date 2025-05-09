@@ -16,6 +16,9 @@ const qnaSchema = new Schema({
     },
     idealAnswer:{
         type:String
+    },
+    audio:{
+        type:String
     }
 })
 
