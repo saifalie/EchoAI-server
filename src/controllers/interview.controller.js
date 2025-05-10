@@ -8,10 +8,12 @@ import { Qna } from "../models/qna.model.js";
 
 export const prepareInterviewQuestions = async (req, res) => {
     try {
-      const { company, role, questionType } = req.body;
+      const { mainTopic, subTopic, specific, difficulty } = req.body;
   
       // Call Gemini to generate 5 questions
-      const prompt = `Generate 5 ${questionType} interview questions for a ${role} position at ${company}.`;
+      const prompt = `Generate 5 ${difficulty} level interview questions for ${mainTopic} focusing on ${subTopic} (${specific}).
+      The questions should be appropriate for the ${difficulty} difficulty level and specifically cover ${specific} concepts within ${subTopic}.`;
+      
       const response = await ai.models.generateContent({
         model: 'gemini-2.0-flash-exp',
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
@@ -83,6 +85,8 @@ export const handleQnaUpload = async (req, res) => {
       
       // Process each audio file with AssemblyAI - First upload to Cloudinary
       const transcripts = [];
+      const uploadResults = []; // Add this array to store upload results
+  
       for (let i = 0; i < files.length; i++) {
         try {
           console.log(`Processing file ${i+1}/${files.length}, size: ${files[i].size} bytes`);
@@ -109,6 +113,7 @@ export const handleQnaUpload = async (req, res) => {
             uploadStream.end(files[i].buffer);
           });
           
+          uploadResults.push(uploadResult); // Store the upload result
           console.log(`File ${i+1} uploaded to Cloudinary: ${uploadResult.secure_url}`);
           
           // Then use the URL with AssemblyAI
@@ -128,6 +133,7 @@ export const handleQnaUpload = async (req, res) => {
           console.error(`Error transcribing file ${i+1}:`, transcriptError);
           // Add placeholder for failed transcription
           transcripts.push("[Transcription failed]");
+          uploadResults.push(null); // Add null for failed uploads
         }
       }
       
@@ -138,17 +144,15 @@ export const handleQnaUpload = async (req, res) => {
         
         Below are interview questions and the candidate's verbal responses (transcribed from audio).
         For each Q&A pair, provide:
-        1. A concise strength/weakness analysis (2-3 sentences)
-        2. Specific suggestions to improve the response (2-3 points)
-        3. A one-sentence overall rating on a scale of 1-10
+        1. A detailed feedback analyzing the response
+        2. An ideal answer that demonstrates best practices
         
-        ${questions.map((q, i) => `Q: ${q}\nA: ${transcripts[i] || "[No response]"}`).join('\n\n')}
+        ${questions.map((q, i) => `Question: ${q}\nAnswer: ${transcripts[i] || "[No response]"}`).join('\n\n')}
         
         Format your response as a JSON array where each object has these properties:
-        - question: the interview question
-        - rating: concise rating (e.g., "7/10 - Good overall with room for improvement")
-        - analysis: strengths and weaknesses of the response
-        - suggestions: specific improvement tips
+        - question: the original question
+        - feedback: detailed analysis of the response
+        - idealAnswer: a model answer demonstrating best practices
       `;
       
       // Use Gemini to analyze the responses
@@ -163,12 +167,11 @@ export const handleQnaUpload = async (req, res) => {
             items: {
               type: Type.OBJECT,
               properties: {
-                question:    { type: Type.STRING },
-                rating:      { type: Type.STRING },
-                analysis:    { type: Type.STRING },
-                suggestions: { type: Type.STRING }
+                question: { type: Type.STRING },
+                feedback: { type: Type.STRING },
+                idealAnswer: { type: Type.STRING }
               },
-              required: ['question','rating','analysis','suggestions']
+              required: ['question', 'feedback', 'idealAnswer']
             }
           }
         }
@@ -180,40 +183,40 @@ export const handleQnaUpload = async (req, res) => {
       const reviews = JSON.parse(jsonText);
       console.log("Reviews generated:", reviews);
       
-      // Create QnA documents
+      // Create QnA documents with audio URLs
       const qnaPromises = questions.map(async (question, index) => {
+        const audioUrl = uploadResults[index] ? uploadResults[index].secure_url : null;
+        
         return await Qna.create({
           question: question,
           answer: transcripts[index] || "[No response]",
-          feedback: reviews[index].analysis,
-          idealAnswer: reviews[index].suggestions
+          feedback: reviews[index].feedback,
+          idealAnswer: reviews[index].idealAnswer,
+          audio: audioUrl
         });
       });
       
       const qnaDocuments = await Promise.all(qnaPromises);
       const qnaIds = qnaDocuments.map(doc => doc._id);
       
-      // Calculate overall scores and feedback
-      const ratings = reviews.map(r => parseInt(r.rating.split('/')[0]));
-      const averageScore = (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1);
-      
-      // Create the review document
+      // Create the review document with a default score since we removed ratings
       const review = await Review.create({
-        feedback: `Overall interview performance score: ${averageScore}/10`,
-        score: averageScore.toString(),
+        feedback: "Based on the detailed analysis of your interview responses",
+        score: "75", // Default score, you can adjust this based on your needs
+        sentiment: "OK",
         compliment: "You participated in all questions and provided responses",
-        strength: reviews.map(r => r.analysis.split('.')[0]), // Take first sentence of each analysis
-        improvement: reviews.map(r => r.suggestions),
+        strength: reviews.map(r => r.feedback.split('.')[0]), // Take first sentence of feedback
+        improvement: reviews.map(r => r.idealAnswer.split('.')[0]), // Take first sentence of ideal answer
         qna: qnaIds,
         companyBased: {
           text: "Based on the responses provided",
-          score: Math.round(averageScore)
+          score: 75
         },
         roleBased: {
           text: "Technical interview assessment",
-          score: Math.round(averageScore)
+          score: 75
         },
-        oneLiner: `Interview performance rated at ${averageScore}/10 with areas for improvement identified`,
+        oneLiner: "Interview assessment completed with detailed feedback provided",
         suggestions: [
           {
             title: "Practice Technical Communication",
